@@ -2,50 +2,32 @@
 #include <unordered_map>
 #include <vector>
 #include <string>
-#include <shared_mutex>
+#include <boost/thread/thread.hpp>
+#include "requestque.h"
+#include "singleton.h"
 using namespace std;
 
 class Topic{
 public:
-    void push(char *);
-    void front(size_t idx);
+    Topic(const string & topic):name(topic){}
+    void push(messInTopic m);
+    messInTopic front(size_t idx);
 private:
-    vector<char *> partition;
+    vector<messInTopic> partition;
     size_t offset = 0;
+    boost::shared_mutex mtx;
+    const string name;
 };
 
 class TopicMgr{
 public:
-    bool hasTopic(const string &topic) {
-        bool ret;
-        {
-            shared_lock<shared_mutex> lock(mtx);
-            
-            ret=(topicList.find(topic) != topicList.end());
-        }
-        return ret;
-    }
-    void createTopic(const string &topic) {
-        unique_lock<shared_mutex> lock(mtx);
-        if(topicList.find(topic) == topicList.end())
-            topicList[topic] = new Topic;
-        
-    }
-    Topic* get(const string& topic) {
-        shared_lock<shared_mutex> lock(mtx);
-        if(topicList.find(topic) != topicList.end())
-            return topicList[topic];
-        return NULL;
-    }
-    void dele(const string& topic) {
-        unique_lock<shared_mutex> lock(mtx);
-        if(topicList.find(topic) == topicList.end())
-            return;
-        delete topicList[topic];
-        topicList.erase(topic);
-    }
+    bool hasTopic(const string &topic);
+    int createTopic(const string &topic);
+    Topic* get(const string& topic);
+    int dele(const string& topic);
 
 private:
     unordered_map<string,Topic*> topicList;
-    shared_mutex mtx;
+    boost::shared_mutex mtx;
 };
+typedef Singleton<TopicMgr> topicMgr;

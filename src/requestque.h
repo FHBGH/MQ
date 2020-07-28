@@ -18,14 +18,33 @@ struct mess{
     //malloc 分配的内存指针存放消息
     char* dst;
 };
+struct messInTopic {
+    int len;
+    char * data;
+};
 struct Head{
     uint32_t cmd;
-    uint32_t topic;
+    bool ack;
+    uint32_t ret;
+    uint32_t offset;
+    uint32_t topicL;
 };
-enum messtype{
+enum CMD{
     PUSH = 0,
-    PULL = 1
+    PULL = 1,
+    CREATE = 3, 
+    DELETE = 4,
+    RSP = 5
 };
+enum statecode{
+    OK = 0,
+    NO_TOPIC = 1,
+    TOPICED = 2,
+    FAIL = 3,
+    INVAILDCMD =4,
+    OFFSET_OUT
+};
+
 class RequestQue {
 private:
     queue<struct mess> que;

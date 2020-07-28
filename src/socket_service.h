@@ -17,7 +17,10 @@
 #include <limits.h>
 #include <signal.h>
 #include <mutex>
+#include <boost/thread/thread.hpp>
+#include <set>
 #include <condition_variable>
+#include "requestque.h"
 using namespace std;
 #define PORT 6000
 
@@ -58,6 +61,10 @@ public:
     vector<int> numPerThread;
     vector<int *> pipe_;
     vector<thread *> thread_;
+    void addHasFd(evutil_socket_t fd);
+    void deleHasFd(evutil_socket_t fd);
+    mutex* getHasFd(evutil_socket_t fd);
+    int do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t offset,uint32_t lenT,string topic ,char* data,uint32_t lenD);
 private:
     static void do_accept(evutil_socket_t listener,short event,void *arg);
     static void error_cb(struct bufferevent *bev, short event, void *arg); 
@@ -66,5 +73,7 @@ private:
     static void signal_cb(evutil_socket_t sig,short event,void* arg);
 
     int socketId;
+    map<evutil_socket_t,mutex*> hasfd; 
+    boost::shared_mutex fdM;
 };
 typedef Singleton<SocketService> socketService;

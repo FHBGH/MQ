@@ -2,7 +2,7 @@
 #include "requestque.h"
 //#include "spdlog/spdlog.h"
 
-//#include "NetDatalog.h"
+
 
 int SocketService::init(int numWork) {
     numWorkThread = numWork;
@@ -162,6 +162,10 @@ void SocketService::do_accept(evutil_socket_t listener,short event,void* arg) {
         base->numPerThreadM.unlock();
     
     }
+
+    socketService::get_mutable_instance().addHasFd(fd);
+    
+
     int ret = write(base->pipe_[idx][1],&fd,sizeof(evutil_socket_t));
     if( ret < 0)
         cout<<"write pipe fail "<<endl;
@@ -190,8 +194,10 @@ void SocketService::error_cb(struct bufferevent *bev, short event, void *arg) {
         printf("some other error\n"); 
         //spdlog::info("some other error");
     } 
-    bufferevent_free(bev); 
     SocketService* th = (SocketService*)arg;
+    th->deleHasFd(fd);
+    bufferevent_free(bev); 
+    
     thread::id tid = this_thread::get_id();
     th->numPerThreadM.lock();
     (th->numPerThread[th->idx[tid]])--;
@@ -238,5 +244,63 @@ void  SocketService::signal_cb(evutil_socket_t sig,short event,void* arg) {
     event_base_loopexit(base,&delay);
 }
 
+void  SocketService::addHasFd(evutil_socket_t fd) {
+    
+    boost::unique_lock<boost::shared_mutex> lock(fdM);
+    hasfd[fd]=new mutex; 
+    
+}
+void SocketService::deleHasFd(evutil_socket_t fd) {
+    boost::unique_lock<boost::shared_mutex> lock(fdM);
+    delete hasfd[fd];
+    hasfd.erase(fd);
+}
+mutex* SocketService::getHasFd(evutil_socket_t fd) {
+    boost::shared_lock<boost::shared_mutex> lock(fdM);
+    if(hasfd.count(fd) == 0)
+        return NULL;
+    return hasfd[fd];
+}
 
+
+int SocketService::do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t offset,uint32_t lenT,string topic ,char* data,uint32_t lenD){
+    char buffer[1024];
+    Head head;
+    head.cmd = cmd;
+    head.ack = ack;
+    head.ret = ret;
+    head.offset = offset;
+    head.topicL = lenT;
+    int len= sizeof(head)+lenT+lenD;
+    if(len > 1024) {
+        cout<<"rsp len > 1024"<<endl;
+        return  -1;
+    }
+    memcpy(buffer,&head,sizeof(head));
+    memcpy(buffer+sizeof(head),topic.c_str(),lenT);
+    memcpy(buffer+sizeof(head)+lenT,data,lenD);
+    int n = 0;
+    mutex * t =  getHasFd(fd);
+    if(t){
+        t->lock();
+        n = write(fd,(void*) buffer,len) ;
+        t->unlock();
+        if( n == len) {
+        
+            return 0;
+        }
+        if( n < 0 ) {
+            
+            return -1;
+        }
+        if( n < len) {
+            
+            return -2;
+        }
+        return -3;
+    }
+
+    return -4;
+
+}
 //////////////////////////////////////resquestque////////////////////////////////////
