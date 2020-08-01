@@ -11,12 +11,18 @@ class Topic{
 public:
     Topic(const string & topic):name(topic){}
     void push(messInTopic m);
-    messInTopic front(size_t idx);
+    messInTopic front(size_t groupId,size_t &idx);
+    bool hasGroup(uint32_t groupId);
+    int addGroup(uint32_t groupId);
+    void upOffset(size_t groupId,size_t idx);
 private:
     vector<messInTopic> partition;
     size_t offset = 0;
     boost::shared_mutex mtx;
     const string name;
+    map<uint32_t,size_t> groupOffset;
+    map<uint32_t,mutex*> groupMutex;
+    boost::shared_mutex group;
 };
 
 class TopicMgr{

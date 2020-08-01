@@ -25,6 +25,7 @@ public:
     void create(mess &m);
     void dele(mess &m);
     void others(mess &m);
+    void subscribe(mess& m);
 };
 
 typedef Singleton<THandlePool> tHandlePool;

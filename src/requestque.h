@@ -22,19 +22,23 @@ struct messInTopic {
     int len;
     char * data;
 };
+#pragma pack(4)
 struct Head{
     uint32_t cmd;
-    bool ack;
     uint32_t ret;
+    uint32_t groupId;
+    bool ack;
     uint32_t offset;
     uint32_t topicL;
 };
+#pragma pack()
 enum CMD{
     PUSH = 0,
     PULL = 1,
     CREATE = 3, 
     DELETE = 4,
-    RSP = 5
+    RSP = 5,
+    SUBSCRIBE
 };
 enum statecode{
     OK = 0,
