@@ -75,7 +75,7 @@ int Consumer::get(size_t groupId_,string topic_){
         Head * h = (Head*)buffer;
         if(h->cmd != RSP||h->ret != OK) {
             //cout<<"message is err or no mess"<<endl;
-           usleep(200000); 
+           
             return -1;
         }
         

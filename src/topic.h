@@ -16,12 +16,16 @@ public:
     int addGroup(uint32_t groupId);
     void upOffset(size_t groupId,size_t idx);
 private:
-    vector<messInTopic> partition;
-    size_t offset = 0;
-    boost::shared_mutex mtx;
+    //vector<messInTopic> partition;
+    //size_t offset = 0;
+    //boost::shared_mutex mtx;
     const string name;
     map<uint32_t,size_t> groupOffset;
-    map<uint32_t,mutex*> groupMutex;
+    map<uint32_t,mutex*> offsetMutex;
+    map<uint32_t,mutex*> queMutex;
+    map<uint32_t,condition_variable*> groupCv;
+    map<uint32_t,vector<messInTopic>> groupQue;
+    map<uint32_t,size_t> groupSize;
     boost::shared_mutex group;
 };
 

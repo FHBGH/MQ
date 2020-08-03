@@ -2,27 +2,57 @@
 #include "zk.h"
 
 void Topic::push(messInTopic m) {
-    boost::unique_lock<boost::shared_mutex> lock(mtx);
-    partition.push_back(m);
-    offset++;
+    //boost::unique_lock<boost::shared_mutex> lock(mtx);
+    //partition.push_back(m);
+    //offset++;
     //zookeeper::get_mutable_instance().set(name,offset);
+
+    //baohu offset mutex cv que 
+    boost::shared_lock<boost::shared_mutex> lock1(group);
+    for(auto iter = groupQue.begin();iter != groupQue.end();iter++) {
+        size_t i = iter->first;
+        {
+            unique_lock<mutex>   lock2(*queMutex[i]);
+            groupQue[i].push_back(m);
+            groupSize[i]++;
+        }
+        groupCv[i]->notify_one();
+
+    }
+
 }
 messInTopic  Topic::front(size_t groupId,size_t &idx) {
-    boost::shared_lock<boost::shared_mutex> lock(mtx);
+    //boost::shared_lock<boost::shared_mutex> lock(mtx);
     messInTopic t;
     t.len = 0;
     boost::shared_lock<boost::shared_mutex> lock1(group);
-    unique_lock<mutex> lock2(*(groupMutex[groupId]));
-    //groupMutex[groupId]->lock();
-    if(groupOffset[groupId]>=offset)
-        return t;
+    
+    unique_lock<mutex> lock3(*offsetMutex[groupId]);
+    unique_lock<mutex> lock2(*queMutex[groupId]);
+    
+    while(groupOffset[groupId] >= groupSize[groupId]) {
+        if(groupCv[groupId] -> wait_for(lock2, std::chrono::milliseconds{ 10000 }) == std::cv_status::timeout)
+        {
+            return t ;
+        }
+    }
+    
+
     idx = groupOffset[groupId]++;
+    return groupQue[groupId][idx];
+
+
+    //unique_lock<mutex> lock2(*(groupMutex[groupId]));
+    //groupMutex[groupId]->lock();
+    //if(groupOffset[groupId]>=offset)
+    //   return t;
+    //idx = groupOffset[groupId]++;
     //groupMutex[groupId]->unlock();
-    return partition[idx];
+    //return partition[idx];
 }
 void Topic::upOffset(size_t groupId,size_t idx) {
     boost::shared_lock<boost::shared_mutex> lock(group);
-    unique_lock<mutex> lock1(*(groupMutex[groupId]));
+    unique_lock<mutex> lock1(*(offsetMutex[groupId]));
     //groupMutex[groupId]->lock();
     groupOffset[groupId] = idx;
     //groupMutex[groupId]->unlock();
@@ -39,8 +69,11 @@ int Topic::addGroup(uint32_t groupId) {
     if(groupOffset.find(groupId) != groupOffset.end())
         return -1;
     groupOffset[groupId] = 0;
-
-    groupMutex[groupId] = new mutex;
+    queMutex[groupId] = new mutex;
+    offsetMutex[groupId] = new mutex;
+    groupCv[groupId] = new condition_variable;
+    groupQue[groupId] = vector<messInTopic>();
+    groupSize[groupId] = 0;
     return 0;
     
 }
