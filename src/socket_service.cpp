@@ -263,12 +263,13 @@ mutex* SocketService::getHasFd(evutil_socket_t fd) {
 }
 
 
-int SocketService::do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t offset,uint32_t lenT,string topic ,char* data,uint32_t lenD){
+int SocketService::do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t  groupId,uint32_t offset,uint32_t lenT,string topic ,char* data,uint32_t lenD){
     char buffer[1024];
     Head head;
     head.cmd = cmd;
     head.ack = ack;
     head.ret = ret;
+    head.groupId = groupId;
     head.offset = offset;
     head.topicL = lenT;
     int len= sizeof(head)+lenT+lenD;

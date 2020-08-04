@@ -6,34 +6,35 @@
 #include "zk.h"
 #include "singleton.h"
 #include <thread>
-#include "requestque.h"
+#include "head.h"
 #include <condition_variable>
+#include <event.h>
+#include <event2/bufferevent.h>
+#include <event2/buffer.h>
+#include <event2/util.h>
 using namespace std;
 
 
 class Consumer{
 public:
     int init(string mqurl);
-    int get(size_t groupId_,string topic_);
-    static void event_handle_zk(const string& path,const string& new_value);
-    void subscrip(size_t groupId_,string topic_);
-    void autoget();
-    condition_variable cv1;
-    queue<char*> que;
-    mutex queM;
-    queue<pair<string,size_t>>  tTO;
-    mutex tTOM; 
-    condition_variable cv;
+    void onInit(string mqurl);
+    void subscrip(map<string,uint32_t> temp);
+    void push(char*);
+    char* pop();
+    static void event_cb(bufferevent *bev, short event, void *arg);
+    static void server_msg_cb(bufferevent *bev, void *arg);
+    void setHandle(void (*fun) (void * arg));
 private:
     string mqIp;
     int mqPort = 0;
-    string zkurl;
-    int socketFd = 0;
-    map<string,int> topicToOffset ;
-    vector<size_t> groupId;
-    vector<string> topic;
-    mutex subM;
-    mutex socketM;
+    condition_variable cv1;
+    queue<char*> que;
+    mutex queM;
+    bufferevent *bev;
+    event_base *base;
+    map<string,uint32_t> topicToGId;
+    void (* handle) (void * arg);
     
     
 };

@@ -64,7 +64,7 @@ public:
     void addHasFd(evutil_socket_t fd);
     void deleHasFd(evutil_socket_t fd);
     mutex* getHasFd(evutil_socket_t fd);
-    int do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t offset,uint32_t lenT,string topic ,char* data,uint32_t lenD);
+    int do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t groupId,uint32_t offset,uint32_t lenT,string topic ,char* data,uint32_t lenD);
 private:
     static void do_accept(evutil_socket_t listener,short event,void *arg);
     static void error_cb(struct bufferevent *bev, short event, void *arg); 

@@ -1,8 +1,5 @@
 #pragma once
-#include <stdint.h>
 #include <event2/event.h>
-using namespace std;
-
 struct mess{
     // int id; 线程id
     //
@@ -18,19 +15,23 @@ struct messInTopic {
     int len;
     char * data;
 };
+#pragma pack(4)
 struct Head{
     uint32_t cmd;
-    bool ack;
     uint32_t ret;
+    uint32_t groupId;
+    bool ack;
     uint32_t offset;
     uint32_t topicL;
 };
+#pragma pack()
 enum CMD{
     PUSH = 0,
     PULL = 1,
     CREATE = 3, 
     DELETE = 4,
-    RSP = 5
+    RSP = 5,
+    SUBSCRIBE
 };
 enum statecode{
     OK = 0,
@@ -38,6 +39,6 @@ enum statecode{
     TOPICED = 2,
     FAIL = 3,
     INVAILDCMD =4,
-    OFFSET_OUT
+    OFFSET_OUT =5,
+    SUBSUCC
 };
-

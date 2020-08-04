@@ -1,8 +1,4 @@
 #pragma once
-#include <queue>
-#include <mutex>
-#include <condition_variable>
-#include "singleton.h"
 #include <stdint.h>
 #include <event2/event.h>
 using namespace std;
@@ -22,7 +18,6 @@ struct messInTopic {
     int len;
     char * data;
 };
-
 #pragma pack(4)
 struct Head{
     uint32_t cmd;
@@ -47,22 +42,7 @@ enum statecode{
     TOPICED = 2,
     FAIL = 3,
     INVAILDCMD =4,
-    OFFSET_OUT
+    OFFSET_OUT =5,
+    SUBSUCC
 };
 
-class RequestQue {
-private:
-    queue<struct mess> que;
-    mutex queM;
-    condition_variable cv;
-    
-public:
-    void getReq(struct mess& m);
-    void pushReq(struct mess& m);
-    //只能在加锁的时候使用
-    bool empty(){
-        return que.empty();
-    }
-
-};
-typedef Singleton<RequestQue> requestQue;
