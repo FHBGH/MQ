@@ -1,5 +1,7 @@
 #include "socket_service.h"
 #include "requestque.h"
+#include <event2/buffer.h>
+
 //#include "spdlog/spdlog.h"
 
 
@@ -163,9 +165,11 @@ void SocketService::do_accept(evutil_socket_t listener,short event,void* arg) {
     
     }
 
-    socketService::get_mutable_instance().addHasFd(fd);
-    
-
+    base->addHasFd(fd);
+    {
+        boost::unique_lock<boost::shared_mutex> lock(base->bufferM);
+        base->buffer[fd] ;
+    }
     int ret = write(base->pipe_[idx][1],&fd,sizeof(evutil_socket_t));
     if( ret < 0)
         cout<<"write pipe fail "<<endl;
@@ -208,9 +212,10 @@ void SocketService::error_cb(struct bufferevent *bev, short event, void *arg) {
 void SocketService::read_cb(struct bufferevent *bev, void *arg) { 
 
     int n; 
-    //SocketService* th = (SocketService*)arg;
+    SocketService* th = (SocketService*)arg;
     evutil_socket_t fd = bufferevent_getfd(bev); 
     //这里要去实现将请求写入请求队列
+    /* 不会只读一行
     char* dst = (char*)malloc(1024);
     cout<<"reading"<<endl;
     //spdlog::info("reading");
@@ -222,17 +227,51 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
         temp.len = n;
         temp.dst = t;
         //push 
+        cout<<"reading "<<n<<" bytes"<<endl;
         requestQue::get_mutable_instance().pushReq(temp);
        // spdlog::info("stroe succ");
         //cout<< "stroe succ"<<endl;
         //bufferevent_write(bev,  "store succ" , 10); 
     } 
-    char temp[1];
-    if(n = bufferevent_read(bev, temp , 1),n !=0 ) {
-        bufferevent_write(bev,  "data biger" , 10); 
-        //spdlog::info("data biger");
-        cout<<"data biger"<<endl;
+    */
+    char buffer[1024];
+    Buffer * buf;
+     {
+        boost::shared_lock<boost::shared_mutex> lock(th->bufferM);
+        buf = &(th->buffer[fd]);
     }
+    while(1){
+        int ret;
+        ret = bufferevent_read(bev,buffer, 1024);
+        if(ret <= 0)
+            break;
+        for(int  i = 0;i < ret; i++){ 
+            if(buffer[i] != '\n'|| buf->offset < sizeof(Head)) {
+                buf -> buf[buf->offset] = buffer[i];
+                buf->offset++;
+                continue; 
+            }
+            struct mess temp;
+            temp.fd = fd;
+            temp.len = buf->offset;
+            char* dst = (char*) malloc( buf->offset);
+            memcpy(dst,buf->buf,buf->offset);
+            temp.dst = dst;
+            buf->offset = 0;
+
+            //push 
+            Head *head =(Head*) dst;
+            
+            cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
+            requestQue::get_mutable_instance().pushReq(temp);
+                
+        }
+    }
+    //if(n = bufferevent_read(bev, temp , 1),n !=0 ) {
+    //    bufferevent_write(bev,  "data biger" , 10); 
+    //    //spdlog::info("data biger");
+    //    cout<<"data biger"<<endl;
+   // }
 } 
 
 void  SocketService::signal_cb(evutil_socket_t sig,short event,void* arg) {

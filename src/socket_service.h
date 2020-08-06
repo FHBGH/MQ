@@ -45,7 +45,10 @@ static void process(int arg){
     int connedId;
     thread *th;
 };
-
+struct Buffer {
+    char buf[1024] ;
+    int offset = 0;
+};
 
 class SocketService {
 public:
@@ -61,6 +64,8 @@ public:
     vector<int> numPerThread;
     vector<int *> pipe_;
     vector<thread *> thread_;
+    map<evutil_socket_t,Buffer> buffer;
+    boost::shared_mutex bufferM;
     void addHasFd(evutil_socket_t fd);
     void deleHasFd(evutil_socket_t fd);
     mutex* getHasFd(evutil_socket_t fd);

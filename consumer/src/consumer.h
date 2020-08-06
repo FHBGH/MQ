@@ -3,7 +3,6 @@
 #include <map>
 #include <queue>
 #include <mutex>
-#include "zk.h"
 #include "singleton.h"
 #include <thread>
 #include "head.h"
@@ -12,6 +11,7 @@
 #include <event2/bufferevent.h>
 #include <event2/buffer.h>
 #include <event2/util.h>
+#include <iostream>
 using namespace std;
 
 

@@ -21,7 +21,7 @@ struct Head{
     uint32_t ret;
     uint32_t groupId;
     bool ack;
-    uint32_t offset;
+    uint64_t offset;
     uint32_t topicL;
 };
 #pragma pack()

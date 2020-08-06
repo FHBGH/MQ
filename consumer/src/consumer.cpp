@@ -42,8 +42,10 @@ void Consumer::server_msg_cb(bufferevent *bev, void *arg) {
             size_t topicL= head->topicL;
             string topic(msg+sizeof(head),topicL);
             th -> topicToGId[topic] = head->groupId;
+            head->offset = -1;
             head -> cmd = PULL;
-            bufferevent_write(bev,msg,len);
+            msg[len] = '\n';
+            bufferevent_write(bev,msg,len+1);
                 
         }
         else if(head ->ret == OK){
@@ -60,15 +62,19 @@ void Consumer::server_msg_cb(bufferevent *bev, void *arg) {
             th->handle(data);
             head -> cmd = PULL;
             //cout<<"push data"<<endl;
-            bufferevent_write(bev,msg,sizeof(Head)+topicL);
+            msg[sizeof(Head)+topicL] = '\n';
+            bufferevent_write(bev,msg,sizeof(Head)+topicL+1);
             //cout<<"write data"<<endl;
         }
         else if(head->ret == OFFSET_OUT) {
             head->cmd = PULL;
-            bufferevent_write(bev,msg,len);
+            //sleep(5);
+            //cout<<"offset send"<<endl;
+            msg[len]='\n';
+            bufferevent_write(bev,msg,len+1);
         }
         else {
-            cout<<"unexcept ret"<<endl;
+            cout<<"unexcept ret  "<<head->ret<<endl;
         }
     }
 
@@ -139,11 +145,13 @@ void Consumer::onInit(string mqurl) {
         head.cmd = SUBSCRIBE;
         head.topicL = iter->first.size();
         head.groupId = iter->second;
+        
         memcpy(buffer,&head,sizeof(head));
         memcpy(buffer+sizeof(Head),iter->first.c_str(),head.topicL);
         int ret = 0;
         //socketM.lock();
-        ret = write(bufferevent_getfd(bev),buffer,sizeof(Head)+head.topicL);
+        buffer[sizeof(Head)+head.topicL] = '\n';
+        ret = write(bufferevent_getfd(bev),buffer,sizeof(Head)+head.topicL+1 );
         //socketM.unlock();
         if(ret == -1) {
             cout<<"write messge fail"<<endl;

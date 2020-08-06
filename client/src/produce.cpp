@@ -38,17 +38,27 @@ int Produce::create(string topic,bool ack) {
     head.topicL=topic.size();
     memcpy(sendline,&head,sizeof(Head));
     memcpy(sendline+sizeof(Head),topic.c_str(),head.topicL);
+    sendline[sizeof(Head)+head.topicL] = '\n';
     int n = 0;
     if(ack == true) {
-        write(socketId,sendline,sizeof(Head)+head.topicL);
+        int ret = 0;
+        ret = write(socketId,sendline,sizeof(Head)+head.topicL+1);
+        if(ret == 0) {
+            cout<<"connnect closed"<<endl;
+            exit(-1);
+        }
         int cnt = 5;
         while( (n = read(socketId,recvline,1024))<0  ) {
             if(cnt == 0){
                 cout<<"exit"<<endl;
                 exit(-1);
             }
-            write(socketId,sendline,sizeof(Head)+head.topicL);
+            write(socketId,sendline,sizeof(Head)+head.topicL+1);
             cnt--;
+        }
+        if(n == 0) {
+            cout<<"connect closed"<<endl;
+            exit(-1);
         }
         Head* rsp =(Head*) recvline;
         if(rsp->cmd==RSP){
@@ -72,14 +82,13 @@ int Produce::create(string topic,bool ack) {
         
     }
     else {
-        write(socketId,sendline,sizeof(Head)+head.topicL);
+        write(socketId,sendline,sizeof(Head)+head.topicL+1);
         cout<<"send create cmd succ"<<endl;
         return 0;
     }
     return 0;
 }
 int Produce::send(string topic,const char* data,size_t len,bool ack ) {
-    cout<< "send"<<endl;
     char sendline[1024], recvline[1024];
     Head head;
     head.cmd = PUSH;
@@ -88,17 +97,27 @@ int Produce::send(string topic,const char* data,size_t len,bool ack ) {
     memcpy(sendline,&head,sizeof(head));
     memcpy(sendline+sizeof(head),topic.c_str(),topic.size());
     memcpy(sendline+sizeof(head)+head.topicL,data,len);
+    sendline[sizeof(Head)+head.topicL+len] = '\n';
     int n = 0;
     if(ack == true) {
-        write(socketId,sendline,sizeof(Head)+head.topicL+len);
+        int ret = 0;
+        ret = write(socketId,sendline,sizeof(Head)+head.topicL+len+1);
+        if(ret == 0) {
+            cout<<"connnect closed"<<endl;
+            exit(-1);
+        }
         int cnt = 5;
         while( (n = read(socketId,recvline,1024))<0  ) {
             if(cnt == 0){
                 cout<<"exit"<<endl;
                 exit(-1);
             }
-            write(socketId,sendline,sizeof(Head)+head.topicL+len);
+            write(socketId,sendline,sizeof(Head)+head.topicL+len+1);
             cnt--;
+        }
+        if(n == 0) {
+            cout<<"connect closed"<<endl;
+            exit(-1);
         }
         Head* rsp =(Head*) recvline;
         if(rsp->cmd==RSP){
@@ -122,7 +141,7 @@ int Produce::send(string topic,const char* data,size_t len,bool ack ) {
         
     }
     else {
-        write(socketId,sendline,sizeof(Head)+head.topicL+len);
+        write(socketId,sendline,sizeof(Head)+head.topicL+len+1);
         //cout<<"send create cmd succ"<<endl;
         return 0;
     }
