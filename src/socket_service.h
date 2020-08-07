@@ -48,6 +48,7 @@ static void process(int arg){
 struct Buffer {
     char buf[1024] ;
     int offset = 0;
+    int len = 0;
 };
 
 class SocketService {
@@ -69,6 +70,7 @@ public:
     void addHasFd(evutil_socket_t fd);
     void deleHasFd(evutil_socket_t fd);
     mutex* getHasFd(evutil_socket_t fd);
+    static void inputQue(evutil_socket_t fd,char* buffer , int len);
     int do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t groupId,uint32_t offset,uint32_t lenT,string topic ,char* data,uint32_t lenD);
 private:
     static void do_accept(evutil_socket_t listener,short event,void *arg);

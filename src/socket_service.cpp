@@ -168,7 +168,8 @@ void SocketService::do_accept(evutil_socket_t listener,short event,void* arg) {
     base->addHasFd(fd);
     {
         boost::unique_lock<boost::shared_mutex> lock(base->bufferM);
-        base->buffer[fd] ;
+        base->buffer[fd].offset = 0 ;
+        base->buffer[fd].len = 0;
     }
     int ret = write(base->pipe_[idx][1],&fd,sizeof(evutil_socket_t));
     if( ret < 0)
@@ -245,6 +246,8 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
         ret = bufferevent_read(bev,buffer, 1024);
         if(ret <= 0)
             break;
+        
+        /*
         for(int  i = 0;i < ret; i++){ 
             if(buffer[i] != '\n'|| buf->offset < sizeof(Head)) {
                 buf -> buf[buf->offset] = buffer[i];
@@ -266,13 +269,115 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
             requestQue::get_mutable_instance().pushReq(temp);
                 
         }
+        */
+
+        if(buf->offset == 0 ) {
+            Head* head = (Head*) buffer;
+            if(ret == head->len) {
+                //cout<<"inque1"<<endl;
+                inputQue(fd,buffer,ret);
+                continue;
+            }
+        }  
+        for(int  i = 0;i < ret; ) { 
+            if(buf->offset == 0) {
+                //如果剩下的自己不够包头长度
+                if( ret-i < sizeof(uint32_t)) {
+                    memcpy(buf->buf,buffer+i,ret -i);
+                    buf->offset = ret-i;
+                    break;  
+                }
+                Head * head = (Head*)(buffer+i);
+                if(i + head->len <= ret ) {
+                    //cout<<"inque2"<<endl;
+                    inputQue(fd,buffer+i,head->len);
+                    i+=head->len;
+                    continue;
+                }
+                else {
+                    memcpy(buf->buf,buffer+i,ret - i);
+                    buf->offset = ret - i;
+                    //cout<<"offset"<<buf->offset<<"headlen"<<head->len<<endl;
+                    buf->len = head->len;
+                    //cout<<"buflen"<<buf->len<<endl;
+                    break;
+                }
+
+
+            }
+            /*
+            int need = buf->len - buf->offset;
+            if(need <= ret) {
+                memcpy(buf->buf+buf->offset,buffer+i,need);
+                buf->offset += need;
+                i += need;
+            } 
+            else {
+                 memcpy(buf->buf+buf->offset,buffer+i,ret);
+                 buf->offset += ret ;
+                 i += ret;
+                 break;
+            }*/
+            if(buf->offset<sizeof(uint32_t)) {
+                if(ret-i+buf->offset < sizeof(uint32_t)) {
+                    memcpy(buf->buf+buf->offset,buffer+i,ret-i);
+                    buf->offset += ret-i;
+                    break;
+                }
+                memcpy(buf->buf+buf->offset,buffer+i,sizeof(uint32_t)-buf->offset);
+                i += sizeof(uint32_t)-buf->offset;
+                buf->offset = sizeof(uint32_t);
+                Head* head = (Head*)buf->buf;
+                buf->len = head->len;
+            }
+            
+            //cout<<"buflen"<<buf->len<<"bufoffset"<<buf->offset<<endl;
+            if(buffer[i] != '\n'|| buf->offset < buf->len -1) {
+                buf -> buf[buf->offset] = buffer[i];
+                buf->offset++;
+                i++;
+                continue; 
+            }
+            
+            struct mess temp;
+            temp.fd = fd;
+            temp.len = buf->offset;
+            char* dst = (char*) malloc( buf->offset);
+            memcpy(dst,buf->buf,buf->offset);
+            temp.dst = dst;
+            buf->offset = 0;
+            buf->len =0;
+            //push 
+            Head *head =(Head*) dst;
+            
+            cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
+            requestQue::get_mutable_instance().pushReq(temp);
+            i++;
+                
+        }
+        
     }
+    //free(buffer);
     //if(n = bufferevent_read(bev, temp , 1),n !=0 ) {
     //    bufferevent_write(bev,  "data biger" , 10); 
     //    //spdlog::info("data biger");
     //    cout<<"data biger"<<endl;
    // }
 } 
+
+void SocketService::inputQue(evutil_socket_t fd,char* buffer , int len) {
+    //cout<<"inputQue"<<endl;
+    struct mess temp;
+    temp.fd = fd;
+    // 去掉 ‘\n'
+    temp.len = len-1;
+    char* dst = (char*) malloc(len-1);
+    memcpy(dst,buffer,len-1);
+    temp.dst = dst;
+    Head *head =(Head*) dst;
+    cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
+    requestQue::get_mutable_instance().pushReq(temp);
+}
 
 void  SocketService::signal_cb(evutil_socket_t sig,short event,void* arg) {
     struct event_base *base = (struct event_base *)arg;

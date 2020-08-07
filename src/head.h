@@ -17,6 +17,7 @@ struct messInTopic {
 };
 #pragma pack(4)
 struct Head{
+    uint32_t len;
     uint32_t cmd;
     uint32_t ret;
     uint32_t groupId;
