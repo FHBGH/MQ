@@ -23,13 +23,14 @@ public:
         for(auto iter = groupQue.begin();iter != groupQue.end();iter++ ) {
             while(!iter->second.empty())
             {
-                free(iter->second.front().data);
+                //free(iter->second.front().data);
                 iter->second.pop();
             }
         }
         for(auto iter = groupCache.begin();iter != groupCache.end();iter++) {
-            for(auto iter1 = iter->second.begin();iter1 != iter->second.end();iter1++)
-                free(iter1->second.data);
+            //for(auto iter1 = iter->second.begin();iter1 != iter->second.end();iter1++)
+                //free(iter1->second.data);
+                iter->second.clear();    
         }
     }
     void push(messInTopic m);
@@ -37,6 +38,7 @@ public:
     bool hasGroup(uint32_t groupId);
     int addGroup(uint32_t groupId);
     void upOffset(size_t groupId,size_t idx);
+    int subGroup(uint32_t groupId);
 private:
     //vector<messInTopic> partition;
     //size_t offset = 0;
@@ -48,6 +50,7 @@ private:
     map<uint32_t,condition_variable*> groupCv;
     map<uint32_t,queue<messInTopic>> groupQue;
     map<uint32_t,map<uint64_t,messInTopic>> groupCache;
+    map<uint32_t,int> groupSub;
     //map<uint32_t,size_t> groupSize;
     boost::shared_mutex group;
 };

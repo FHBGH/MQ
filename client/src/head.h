@@ -20,6 +20,7 @@ struct messInTopic {
 };
 #pragma pack(4)
 struct Head{
+    uint32_t len;
     uint32_t cmd;
     uint32_t ret;
     uint32_t groupId;
@@ -34,7 +35,8 @@ enum CMD{
     CREATE = 3, 
     DELETE = 4,
     RSP = 5,
-    SUBSCRIBE
+    SUBSCRIBE = 6,
+    DELESUB
 };
 enum statecode{
     OK = 0,

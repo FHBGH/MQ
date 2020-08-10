@@ -23,4 +23,4 @@ public:
 private:
     int socketId;
 };
-typedef Singleton<Produce> produce;
+//typedef Singleton<Produce> produce;

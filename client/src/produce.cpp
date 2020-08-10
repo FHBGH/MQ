@@ -36,13 +36,14 @@ int Produce::create(string topic,bool ack) {
     head.cmd=CREATE;
     head.ack=ack;
     head.topicL=topic.size();
+    head.len = sizeof(Head)+head.topicL+1;
     memcpy(sendline,&head,sizeof(Head));
     memcpy(sendline+sizeof(Head),topic.c_str(),head.topicL);
     sendline[sizeof(Head)+head.topicL] = '\n';
     int n = 0;
     if(ack == true) {
         int ret = 0;
-        ret = write(socketId,sendline,sizeof(Head)+head.topicL+1);
+        ret = write(socketId,sendline,head.len);
         if(ret == 0) {
             cout<<"connnect closed"<<endl;
             exit(-1);
@@ -53,7 +54,7 @@ int Produce::create(string topic,bool ack) {
                 cout<<"exit"<<endl;
                 exit(-1);
             }
-            write(socketId,sendline,sizeof(Head)+head.topicL+1);
+            write(socketId,sendline,head.len);
             cnt--;
         }
         if(n == 0) {
@@ -82,7 +83,7 @@ int Produce::create(string topic,bool ack) {
         
     }
     else {
-        write(socketId,sendline,sizeof(Head)+head.topicL+1);
+        write(socketId,sendline,head.len);
         cout<<"send create cmd succ"<<endl;
         return 0;
     }
@@ -94,14 +95,16 @@ int Produce::send(string topic,const char* data,size_t len,bool ack ) {
     head.cmd = PUSH;
     head.ack = ack;
     head.topicL = topic.size();
+    head.len = sizeof(Head)+head.topicL+len+1;
     memcpy(sendline,&head,sizeof(head));
     memcpy(sendline+sizeof(head),topic.c_str(),topic.size());
     memcpy(sendline+sizeof(head)+head.topicL,data,len);
     sendline[sizeof(Head)+head.topicL+len] = '\n';
+    
     int n = 0;
     if(ack == true) {
         int ret = 0;
-        ret = write(socketId,sendline,sizeof(Head)+head.topicL+len+1);
+        ret = write(socketId,sendline,head.len);
         if(ret == 0) {
             cout<<"connnect closed"<<endl;
             exit(-1);
@@ -112,7 +115,7 @@ int Produce::send(string topic,const char* data,size_t len,bool ack ) {
                 cout<<"exit"<<endl;
                 exit(-1);
             }
-            write(socketId,sendline,sizeof(Head)+head.topicL+len+1);
+            write(socketId,sendline,head.len);
             cnt--;
         }
         if(n == 0) {
@@ -141,7 +144,7 @@ int Produce::send(string topic,const char* data,size_t len,bool ack ) {
         
     }
     else {
-        write(socketId,sendline,sizeof(Head)+head.topicL+len+1);
+        write(socketId,sendline,head.len);
         //cout<<"send create cmd succ"<<endl;
         return 0;
     }

@@ -1,5 +1,6 @@
 #pragma once
 #include <event2/event.h>
+#include <memory>
 struct mess{
     // int id; 线程id
     //
@@ -13,7 +14,7 @@ struct mess{
 };
 struct messInTopic {
     int len;
-    char * data;
+    std::shared_ptr<char> data;
 };
 #pragma pack(4)
 struct Head{
@@ -32,7 +33,8 @@ enum CMD{
     CREATE = 3, 
     DELETE = 4,
     RSP = 5,
-    SUBSCRIBE
+    SUBSCRIBE = 6,
+    DELESUB
 };
 enum statecode{
     OK = 0,

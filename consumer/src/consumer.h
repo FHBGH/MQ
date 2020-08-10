@@ -17,25 +17,20 @@ using namespace std;
 
 class Consumer{
 public:
-    int init(string mqurl);
-    void onInit(string mqurl);
-    void subscrip(map<string,uint32_t> temp);
+    int init(string mqurl,uint32_t groupId);
+    int subscrip(string topic);
     void push(char*);
     char* pop();
-    static void event_cb(bufferevent *bev, short event, void *arg);
-    static void server_msg_cb(bufferevent *bev, void *arg);
-    void setHandle(void (*fun) (void * arg));
+    int get(const string topic,char* message,int& len,uint64_t& seq);
+    int deleSub(const string topic);
 private:
     string mqIp;
     int mqPort = 0;
     condition_variable cv1;
     queue<char*> que;
     mutex queM;
-    bufferevent *bev;
-    event_base *base;
-    map<string,uint32_t> topicToGId;
-    void (* handle) (void * arg);
-    
+    int socketId;
+    uint32_t groupId;
     
 };
-typedef Singleton<Consumer> consumer;
+//typedef Singleton<Consumer> consumer;

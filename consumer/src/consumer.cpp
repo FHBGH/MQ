@@ -7,78 +7,7 @@
 #include <unistd.h>
 
 
-void Consumer::event_cb(bufferevent *bev, short event, void *arg) {
-    Consumer* th = (Consumer*) arg;
-    if (event & BEV_EVENT_EOF) {
-        printf("Connection closed.\n");
-    }
-    else if (event & BEV_EVENT_ERROR) {
-        printf("Some other error.\n");
-    }
-    else if (event & BEV_EVENT_CONNECTED) {
-        printf("Client has successfully cliented.\n");
-        return;
-    }
 
-    bufferevent_free(bev);
-
-    // free event_cmd
-    // need struct as event is defined as parameter
-    //struct event_base *base = (struct event_base *)arg;
-    event_base_free(th->base);
-}
-void Consumer::server_msg_cb(bufferevent *bev, void *arg) {
-    Consumer * th = (Consumer*)arg;
-    char msg[1024];
-
-    size_t len = bufferevent_read(bev, msg, sizeof(msg)-1);
-    //msg[len] = '\0';
-
-    Head * head = (Head*) msg;
-    if(head->cmd == RSP) {
-
-        if(head->ret == SUBSUCC) {
-            cout<<"subcrib succ"<<endl;
-            size_t topicL= head->topicL;
-            string topic(msg+sizeof(head),topicL);
-            th -> topicToGId[topic] = head->groupId;
-            head->offset = -1;
-            head -> cmd = PULL;
-            msg[len] = '\n';
-            bufferevent_write(bev,msg,len+1);
-                
-        }
-        else if(head ->ret == OK){
-            //cout<<"get a data"<<endl;
-            size_t topicL= head->topicL;
-          
-            //string topic(msg+sizeof(head),topicL);
-            int size =len-sizeof(Head)-topicL+1;
-            char *data = (char*) malloc(size);
-            memcpy(data,msg+sizeof(Head)+topicL,size - 1);
-            data[size-1] = '\0';
-            //cout<< data<<endl;
-            //th->push(data);
-            th->handle(data);
-            head -> cmd = PULL;
-            //cout<<"push data"<<endl;
-            msg[sizeof(Head)+topicL] = '\n';
-            bufferevent_write(bev,msg,sizeof(Head)+topicL+1);
-            //cout<<"write data"<<endl;
-        }
-        else if(head->ret == OFFSET_OUT) {
-            head->cmd = PULL;
-            //sleep(5);
-            //cout<<"offset send"<<endl;
-            msg[len]='\n';
-            bufferevent_write(bev,msg,len+1);
-        }
-        else {
-            cout<<"unexcept ret  "<<head->ret<<endl;
-        }
-    }
-
-}
 char* Consumer::pop() {
     
     unique_lock<mutex> lock(queM);
@@ -96,13 +25,8 @@ void Consumer::push(char* data) {
     }
     cv1.notify_all();
 }
-int Consumer::init(string mqurl) {
-    thread t(&Consumer::onInit,this,mqurl);
-    t.detach();  
-    sleep(3);
-    cout<<"init detch"<<endl;
-}
-void Consumer::onInit(string mqurl) {
+int Consumer::init(string mqurl,uint32_t groupId) {
+    this->groupId = groupId;
     int idx = 0;
     for(;idx<mqurl.size();idx++) {
         if(mqurl[idx] == ':')
@@ -111,58 +35,154 @@ void Consumer::onInit(string mqurl) {
     
     mqIp=mqurl.substr(0,idx);
     mqPort = stoi(mqurl.substr(idx+1));
-    
-    base = event_base_new();
-    bev  = bufferevent_socket_new(base, -1, BEV_OPT_CLOSE_ON_FREE);
-
     const char * servInetAddr = mqIp.c_str();
-    int servPort = mqPort;
-    char buf[1024];
+    uint32_t servPort = mqPort;
     struct sockaddr_in servaddr;
+    socketId = socket(AF_INET, SOCK_STREAM, 0);
 
     bzero(&servaddr, sizeof(servaddr));
     servaddr.sin_family = AF_INET;
     servaddr.sin_port = htons(servPort);
     inet_pton(AF_INET, servInetAddr, &servaddr.sin_addr);
 
-    bufferevent_socket_connect(bev, (sockaddr *)&servaddr, sizeof(servaddr));
-    cout<<"conneted"<<endl;
-    bufferevent_setcb(bev, server_msg_cb, NULL, event_cb, (void*)this);
-    bufferevent_enable(bev, EV_READ|EV_WRITE|EV_PERSIST);
-    
-    event_base_dispatch(base);
-    //thread g(&Consumer::autoget,this);
-    //g.detach();
+    if (connect(socketId, (struct sockaddr *) &servaddr, sizeof(servaddr)) < 0) {
+        cout<<"connect fail"<<endl;
+        return -1;
+    }
+    struct timeval      tv;
+    tv.tv_sec = 15;
+    tv.tv_usec = 0;
+    //setsockopt(socketId, SOL_SOCKET, SO_RCVTIMEO, &tv, sizeof(tv));
     cout<<"consumer init succ"<<endl;
-    return ;
+    return 0;
 }
 
- void  Consumer::subscrip(map<string,uint32_t> temp) {
+int  Consumer::subscrip(string topic) {
     char buffer[1024];
-    cout<<"subscrip"<<endl;
-    for(auto iter = temp.begin();iter != temp.end();iter++){
-        Head head;
-        head.cmd = SUBSCRIBE;
-        head.topicL = iter->first.size();
-        head.groupId = iter->second;
-        
-        memcpy(buffer,&head,sizeof(head));
-        memcpy(buffer+sizeof(Head),iter->first.c_str(),head.topicL);
-        int ret = 0;
-        //socketM.lock();
-        buffer[sizeof(Head)+head.topicL] = '\n';
-        ret = write(bufferevent_getfd(bev),buffer,sizeof(Head)+head.topicL+1 );
-        //socketM.unlock();
-        if(ret == -1) {
-            cout<<"write messge fail"<<endl;
-            return ;
-        }
-        cout<<"writ succ "<<ret<<endl;
-        
+    Head head;
+    head.cmd = SUBSCRIBE;
+    head.topicL = topic.size();
+    head.groupId = groupId;
+    head.len = sizeof(Head)+head.topicL+1;
+    memcpy(buffer,&head,sizeof(head));
+    memcpy(buffer+sizeof(Head),topic.c_str(),head.topicL);
+    buffer[sizeof(Head)+head.topicL] = '\n';
+    
+    int ret = 0;
+    ret = write(socketId,buffer,head.len);
+    if(ret == -1) {
+        cout<<"send subscrip mess fail"<<endl;
+        return -1;
     }
+    cout<<"subscrip mess send succ "<<endl;
+    
+    ret = read(socketId,buffer,1024);
+    if( ret <= 0){
+        cout<<"no subscrip succ rsp "<<endl;
+        return -1;
+    }
+    Head * h = (Head*) buffer;
+    if(h->cmd == RSP) {
+
+        if(h->ret == SUBSUCC) {
+            cout<<"subcrib succ"<<endl;
+            return 0;      
+        }
+        else {
+            cout<<"no expect ret or no topic"<<endl;
+            return -1;
+        }
+    }
+    else {
+        cout<<"no expect rsp cmd"<<endl;
+        return -1;
+    }
+    return 0;
     
  }
- 
-void Consumer::setHandle(void (*fun) (void * arg)) {
-    Consumer::handle = fun;
+
+int Consumer::get(const string topic,char* message,int& len,uint64_t& seq) {
+    char buffer[1024];
+    Head head;
+    head.cmd = PULL;
+    head.topicL = topic.size();
+    head.groupId = groupId;
+    head.offset = seq;
+    head.len = sizeof(Head)+head.topicL+1;
+    memcpy(buffer,&head,sizeof(head));
+    memcpy(buffer+sizeof(Head),topic.c_str(),head.topicL);
+    buffer[sizeof(Head)+head.topicL] = '\n';
+    
+    int ret = 0;
+    ret = write(socketId,buffer,head.len);
+    if(ret == -1) {
+        cout<<"send req fail"<<endl;
+        return -1;
+    }
+    //cout<<"subscrip mess send succ "<<endl;
+    
+    ret = read(socketId,buffer,1024);
+    if( ret <= 0){
+        cout<<"no recv rsp "<<endl;
+        return -1;
+    }
+    Head * h = (Head*) buffer;
+    if(h->cmd != RSP) {
+        cout<<" unexpect cmd "<<endl;
+        return -1;
+    }
+    if(h->ret == OK) {
+        size_t topicL= h->topicL;
+        len =ret-sizeof(Head)-topicL;
+        memcpy(message,buffer+sizeof(Head)+topicL,len);
+        seq = h->offset;
+        return 0;
+    }
+    else if(h->ret == OFFSET_OUT) {
+        len = 0;
+        seq = h->offset;
+        return 0;
+    }
+    else {
+        cout<<" unexcept   ret  or no topic"<<endl;
+        return -1;
+    }
+}
+int Consumer::deleSub(const string topic) {
+    char buffer[1024];
+    Head head;
+    head.cmd = DELESUB;
+    head.topicL = topic.size();
+    head.groupId = groupId;
+    head.len = sizeof(Head)+head.topicL+1;
+    memcpy(buffer,&head,sizeof(head));
+    memcpy(buffer+sizeof(Head),topic.c_str(),head.topicL);
+    buffer[sizeof(Head)+head.topicL] = '\n';
+    
+    int ret = 0;
+    ret = write(socketId,buffer,head.len);
+    if(ret == -1) {
+        cout<<"send req fail"<<endl;
+        return -1;
+    }
+    //cout<<"subscrip mess send succ "<<endl;
+    
+    ret = read(socketId,buffer,1024);
+    if( ret <= 0){
+        cout<<"no recv rsp "<<endl;
+        return -1;
+    }
+    Head * h = (Head*) buffer;
+    if(h->cmd != RSP) {
+        cout<<" unexpect cmd "<<endl;
+        return -1;
+    }
+    if(h->ret == OK) {
+        cout<<"delesub succ"<<endl;
+        return 0;
+    }
+    else {
+        cout<<" unexcept   ret  or no topic"<<endl;
+        return -1;
+    }
 }

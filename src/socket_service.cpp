@@ -2,10 +2,6 @@
 #include "requestque.h"
 #include <event2/buffer.h>
 
-//#include "spdlog/spdlog.h"
-
-
-
 int SocketService::init(int numWork) {
     numWorkThread = numWork;
     for(int i=0;i<numWork;i++) {
@@ -15,7 +11,6 @@ int SocketService::init(int numWork) {
         int ret = pipe(t);
         if(ret < 0) {
             cout<<"pipe create faill"<<endl;
-            //spdlog::error("pipe create faill|ret = {}",ret);
             return -1;
         }
 
@@ -23,7 +18,6 @@ int SocketService::init(int numWork) {
         
     }
     cout<<"socketservice init succ"<<endl;
-    //spdlog::info("socketservice init succ");
     return 0;
         
 }
@@ -35,9 +29,6 @@ int SocketService::mainThread() {
         
 
         cout<<"workThread "<<i<<" create succc"<<endl;
-        //spdlog::info("workThread {} createsucc!!!",i);
-        //thread::id tid = this_thread::get_id();
-        //this->idx[tid]=i;
     }
 
 
@@ -53,27 +44,22 @@ int SocketService::mainThread() {
     if(ret<0) {
         string err="socket bind faild|return "+to_string(ret);
         cout<<err<<endl;
-        //spdlog::error("socket bind faild|ret {}",ret);
         return -1;
     }
     cout<<"socket bind succ"<<endl;
-    //spdlog::info("socket bind succ!!!");
     ret = listen(socketId,20);
     if(ret<0) {
         string err="socket listen faild|return "+to_string(ret);
         cout<<err<<endl;
-        //spdlog::error("socket listen faild|ret {}",ret);
         return -1;
     }
     cout<<"socket listen succ"<<endl;
-    //spdlog::info("socket listen succ!!!");
     evutil_make_socket_nonblocking(socketId);
 
     struct event_base *base = event_base_new();
 
     if(base == NULL) {
         cout<<"base is NULL"<<endl;
-        //spdlog::error("base is NULL|ret = {}",-1);
         return -1;
     }
 
@@ -123,11 +109,8 @@ void SocketService::do_pipe(int fd,short event,void *arg){
     if(ret < 0) {
         cout<<"do_pipe read fail"<<endl;
         return;
-        //spdlog::error("do_pipe read faile|ret = {}",ret);
     }
     cout<<"do_pipe read succ"<<endl;
-    //spdlog::info("do_pipe read succ");
-
     struct bufferevent *bev = bufferevent_socket_new(base,fd_,BEV_OPT_CLOSE_ON_FREE);
     bufferevent_setcb(bev,read_cb,NULL,error_cb,(void*)&socketService::get_mutable_instance());
     bufferevent_enable(bev,EV_READ|EV_WRITE|EV_PERSIST);
@@ -143,16 +126,13 @@ void SocketService::do_accept(evutil_socket_t listener,short event,void* arg) {
     fd = accept(listener,(struct sockaddr *)&sin,&slen);
     if(fd < 0) {
         cout<<"accept erro"<<endl;
-        //spdlog::error("accept erro|fd = {}",fd);
         return;
     }
     if(fd > FD_SETSIZE) {
         cout<<"fd>FD_SETSIZE"<<endl;
-        //spdlog::error("fd>FD_SETSIZE|fd = {}",fd);
         return;
     }
     cout<<"accept fd "<<fd<<endl;
-    //spdlog::info("accept fd = {}",fd);
     int idx = 0;
     int min_= INT_MAX;
     for(int i = 0;i < base->numWorkThread;i++) {
@@ -174,9 +154,7 @@ void SocketService::do_accept(evutil_socket_t listener,short event,void* arg) {
     int ret = write(base->pipe_[idx][1],&fd,sizeof(evutil_socket_t));
     if( ret < 0)
         cout<<"write pipe fail "<<endl;
-        //spdlog::error("write pipe fail|ret = {}",ret);
     cout<< "write pipe succ"<<endl;
-    //spdlog::info("write pipe succ");
     base->numPerThreadM.lock();
     base->numPerThread[idx]++;
     base->numPerThreadM.unlock();
@@ -186,23 +164,22 @@ void SocketService::do_accept(evutil_socket_t listener,short event,void* arg) {
 void SocketService::error_cb(struct bufferevent *bev, short event, void *arg) { 
     evutil_socket_t fd = bufferevent_getfd(bev); 
     printf("fd = %u, ", fd); 
-   // spdlog::info("fd = {}",fd);
     if (event & BEV_EVENT_TIMEOUT) { 
         printf("Timed out\n"); //if bufferevent_set_timeouts() called 
-        //spdlog::info("Timeid out");
     } 
     else if (event & BEV_EVENT_EOF) { 
         printf("connection closed\n");
-        //spdlog::info("connection closed");
     } 
     else if (event & BEV_EVENT_ERROR) { 
         printf("some other error\n"); 
-        //spdlog::info("some other error");
     } 
     SocketService* th = (SocketService*)arg;
     th->deleHasFd(fd);
     bufferevent_free(bev); 
-    
+    {
+        boost::unique_lock<boost::shared_mutex> lock(th->bufferM);
+        th->buffer.erase(fd);
+    }
     thread::id tid = this_thread::get_id();
     th->numPerThreadM.lock();
     (th->numPerThread[th->idx[tid]])--;
@@ -215,26 +192,6 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
     int n; 
     SocketService* th = (SocketService*)arg;
     evutil_socket_t fd = bufferevent_getfd(bev); 
-    //这里要去实现将请求写入请求队列
-    /* 不会只读一行
-    char* dst = (char*)malloc(1024);
-    cout<<"reading"<<endl;
-    //spdlog::info("reading");
-    if(n = bufferevent_read(bev, dst, 1024), n > 0) { 
-        char *t = (char*)malloc(n);
-        memcpy(t,dst,n);
-        struct mess temp;
-        temp.fd = fd;
-        temp.len = n;
-        temp.dst = t;
-        //push 
-        cout<<"reading "<<n<<" bytes"<<endl;
-        requestQue::get_mutable_instance().pushReq(temp);
-       // spdlog::info("stroe succ");
-        //cout<< "stroe succ"<<endl;
-        //bufferevent_write(bev,  "store succ" , 10); 
-    } 
-    */
     char buffer[1024];
     Buffer * buf;
      {
@@ -246,36 +203,15 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
         ret = bufferevent_read(bev,buffer, 1024);
         if(ret <= 0)
             break;
-        
-        /*
-        for(int  i = 0;i < ret; i++){ 
-            if(buffer[i] != '\n'|| buf->offset < sizeof(Head)) {
-                buf -> buf[buf->offset] = buffer[i];
-                buf->offset++;
-                continue; 
-            }
-            struct mess temp;
-            temp.fd = fd;
-            temp.len = buf->offset;
-            char* dst = (char*) malloc( buf->offset);
-            memcpy(dst,buf->buf,buf->offset);
-            temp.dst = dst;
-            buf->offset = 0;
-
-            //push 
-            Head *head =(Head*) dst;
-            
-            cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
-            requestQue::get_mutable_instance().pushReq(temp);
-                
-        }
-        */
 
         if(buf->offset == 0 ) {
             Head* head = (Head*) buffer;
             if(ret == head->len) {
                 //cout<<"inque1"<<endl;
-                inputQue(fd,buffer,ret);
+                if( inputQue(fd,buffer,ret) !=0 ) {
+                    th->release(bev);
+                    return;
+                }
                 continue;
             }
         }  
@@ -289,8 +225,10 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
                 }
                 Head * head = (Head*)(buffer+i);
                 if(i + head->len <= ret ) {
-                    //cout<<"inque2"<<endl;
-                    inputQue(fd,buffer+i,head->len);
+                    if( inputQue(fd,buffer+i,head->len) !=0 ) {
+                        th->release(bev);
+                        return;
+                    }     
                     i+=head->len;
                     continue;
                 }
@@ -305,19 +243,6 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
 
 
             }
-            /*
-            int need = buf->len - buf->offset;
-            if(need <= ret) {
-                memcpy(buf->buf+buf->offset,buffer+i,need);
-                buf->offset += need;
-                i += need;
-            } 
-            else {
-                 memcpy(buf->buf+buf->offset,buffer+i,ret);
-                 buf->offset += ret ;
-                 i += ret;
-                 break;
-            }*/
             if(buf->offset<sizeof(uint32_t)) {
                 if(ret-i+buf->offset < sizeof(uint32_t)) {
                     memcpy(buf->buf+buf->offset,buffer+i,ret-i);
@@ -332,51 +257,76 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
             }
             
             //cout<<"buflen"<<buf->len<<"bufoffset"<<buf->offset<<endl;
+            /*
             if(buffer[i] != '\n'|| buf->offset < buf->len -1) {
                 buf -> buf[buf->offset] = buffer[i];
                 buf->offset++;
                 i++;
                 continue; 
+            }*/
+            int need = buf->len - buf->offset;
+            if(need <= ret) {
+                memcpy(buf->buf+buf->offset,buffer+i,need);
+                buf->offset += need;
+                i += need;
+            } 
+            else {
+                 memcpy(buf->buf+buf->offset,buffer+i,ret);
+                 buf->offset += ret ;
+                 i += ret;
+                 break;
             }
-            
             struct mess temp;
             temp.fd = fd;
-            temp.len = buf->offset;
-            char* dst = (char*) malloc( buf->offset);
-            memcpy(dst,buf->buf,buf->offset);
+            temp.len = buf->offset-1;
+            if(buf->buf[temp.len] != '\n') {
+                th->release(bev);
+                return;
+            }
+               
+            char* dst = (char*) malloc( buf->offset-1);
+            memcpy(dst,buf->buf,buf->offset-1);
             temp.dst = dst;
             buf->offset = 0;
             buf->len =0;
-            //push 
-            Head *head =(Head*) dst;
-            
-            cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
+             
+            //cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
             requestQue::get_mutable_instance().pushReq(temp);
-            i++;
+            //i++;
                 
         }
         
     }
-    //free(buffer);
-    //if(n = bufferevent_read(bev, temp , 1),n !=0 ) {
-    //    bufferevent_write(bev,  "data biger" , 10); 
-    //    //spdlog::info("data biger");
-    //    cout<<"data biger"<<endl;
-   // }
 } 
 
-void SocketService::inputQue(evutil_socket_t fd,char* buffer , int len) {
-    //cout<<"inputQue"<<endl;
+int SocketService::inputQue(evutil_socket_t fd,char* buffer , int len) { 
     struct mess temp;
     temp.fd = fd;
     // 去掉 ‘\n'
     temp.len = len-1;
+    if(buffer[len-1] != '\n')
+        return -1;
     char* dst = (char*) malloc(len-1);
     memcpy(dst,buffer,len-1);
     temp.dst = dst;
-    Head *head =(Head*) dst;
-    cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
+    //Head *head =(Head*) dst;
+    //
+    //cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
     requestQue::get_mutable_instance().pushReq(temp);
+    return 0;
+}
+void SocketService::release(struct bufferevent *bev) {
+    evutil_socket_t fd = bufferevent_getfd(bev); 
+    deleHasFd(fd);
+    bufferevent_free(bev); 
+    {
+        boost::unique_lock<boost::shared_mutex> lock(bufferM);
+        buffer.erase(fd);
+    }
+    thread::id tid = this_thread::get_id();
+    numPerThreadM.lock();
+    (numPerThread[idx[tid]])--;
+    numPerThreadM.unlock();
 }
 
 void  SocketService::signal_cb(evutil_socket_t sig,short event,void* arg) {
@@ -391,23 +341,22 @@ void  SocketService::signal_cb(evutil_socket_t sig,short event,void* arg) {
 void  SocketService::addHasFd(evutil_socket_t fd) {
     
     boost::unique_lock<boost::shared_mutex> lock(fdM);
-    hasfd[fd]=new mutex; 
+    hasfd.insert(fd);
     
 }
 void SocketService::deleHasFd(evutil_socket_t fd) {
     boost::unique_lock<boost::shared_mutex> lock(fdM);
-    delete hasfd[fd];
     hasfd.erase(fd);
 }
-mutex* SocketService::getHasFd(evutil_socket_t fd) {
+bool SocketService::getHasFd(evutil_socket_t fd) {
     boost::shared_lock<boost::shared_mutex> lock(fdM);
-    if(hasfd.count(fd) == 0)
+    if(hasfd.find(fd) == hasfd.end())
         return NULL;
-    return hasfd[fd];
+    return true;
 }
 
 
-int SocketService::do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t  groupId,uint32_t offset,uint32_t lenT,string topic ,char* data,uint32_t lenD){
+int SocketService::do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint32_t  groupId,uint32_t offset,uint32_t lenT,string topic ,shared_ptr<char> data,uint32_t lenD){
     char buffer[1024];
     Head head;
     head.cmd = cmd;
@@ -418,18 +367,18 @@ int SocketService::do_rsp(evutil_socket_t fd,CMD cmd,bool ack,uint32_t ret,uint3
     head.topicL = lenT;
     int len= sizeof(head)+lenT+lenD;
     if(len > 1024) {
-        cout<<"rsp len > 1024"<<endl;
+        //cout<<"rsp len > 1024"<<endl;
         return  -1;
     }
     memcpy(buffer,&head,sizeof(head));
     memcpy(buffer+sizeof(head),topic.c_str(),lenT);
-    memcpy(buffer+sizeof(head)+lenT,data,lenD);
+    memcpy(buffer+sizeof(head)+lenT,data.get(),lenD);
     int n = 0;
-    mutex * t =  getHasFd(fd);
+    bool t =  getHasFd(fd);
     if(t){
-        t->lock();
+        //t->lock();
         n = write(fd,(void*) buffer,len) ;
-        t->unlock();
+        //->unlock();
         if( n == len) {
         
             return 0;

@@ -18,7 +18,7 @@ void THandlePool::workThread(){
     while(1) {
         struct mess m;
         requestQue::get_mutable_instance().getReq(m);
-        cout<<"handle thread get a mess"<<endl;
+        //cout<<"handle thread get a mess"<<endl;
         //spdlog::info("handle thread get a mess ");
         Head* head =reinterpret_cast<Head*>(m.dst);
         switch (head->cmd) {
@@ -27,6 +27,7 @@ void THandlePool::workThread(){
             case CREATE:create(m);break;
             case DELETE:dele(m);break;
             case SUBSCRIBE:subscribe(m);break;
+            case DELESUB:dele(m);break;
             default: others(m);
         }
     }
@@ -39,8 +40,10 @@ void THandlePool::push(mess &m) {
     char* t =m.dst+sizeof(Head);
     string topic(t,topicL);
     int len = m.len-sizeof(Head)-topicL;
-    char *data = (char*) malloc(len);
-    memcpy(data,m.dst+sizeof(Head)+topicL,len);
+    //new 分配内存for 共享指针
+    //char *data = (char*) malloc(len);
+    shared_ptr<char> data(new char[len], [](char* p) { delete[] p; });
+    memcpy(data.get(),m.dst+sizeof(Head)+topicL,len);
     free(m.dst);
     messInTopic mt;
     mt.len = len;
@@ -50,7 +53,7 @@ void THandlePool::push(mess &m) {
     {
         if(partion == NULL){
             cout<< "no topic" <<endl;
-            free(mt.data);
+            //free(mt.data);
             return;
         }
         partion->push(mt);
@@ -59,12 +62,12 @@ void THandlePool::push(mess &m) {
         int ret = 0;
         if(partion == NULL){
             cout<< "no topic" <<endl;
-            free(mt.data); 
+            //free(mt.data); 
           
             ret = socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,NO_TOPIC,0,0,0,"",NULL,0);
        
             if(ret == 0){
-                cout<<"write rsp  succ "<<endl;
+                //cout<<"write rsp  succ "<<endl;
                 return;
             }
             cout<<"write rsp fail"<<endl;
@@ -72,15 +75,15 @@ void THandlePool::push(mess &m) {
         
         }
         partion->push(mt);
-        cout <<"push mess to topic succ"<<endl;
+        //cout <<"push mess to topic succ"<<endl;
         
         
         ret = socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,0,0,0,"",NULL,0);       
         if(ret == 0){
-            cout<<"write rsp  succ "<<endl;
+            //cout<<"write rsp  succ "<<endl;
             return;
         }
-        cout<<"write rsp succ"<<endl;
+        //cout<<"write rsp succ"<<endl;
         return;
     }
     return;
@@ -101,7 +104,7 @@ void THandlePool::pull(mess& m){
         ret = socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,NO_TOPIC,groupId,offset,topicL,topic,NULL,0);
     
         if(ret == 0){
-            cout<<"write rsp  succ "<<endl;
+            //cout<<"write rsp  succ "<<endl;
             return;
         }
         cout<<"write rsp faill"<<endl;
@@ -111,14 +114,14 @@ void THandlePool::pull(mess& m){
     messInTopic mt = T->front(groupId,offset,idx);
     if(mt.len == 0)
     {
-        cout<<"offset out"<<endl;
+        //cout<<"offset out"<<endl;
         
  
 
         ret = socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OFFSET_OUT,groupId,offset,topicL,topic,NULL,0);
             
         if(ret == 0){
-            cout<<"write rsp  succ "<<endl;
+            //cout<<"write rsp  succ "<<endl;
             return;
         }
         cout<<"write rsp fail"<<endl;
@@ -128,7 +131,7 @@ void THandlePool::pull(mess& m){
     
     ret = socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,groupId,idx,topicL,topic,mt.data,mt.len);
     if(ret == 0){
-        cout<<"write rsp  succ "<<endl;
+        //cout<<"write rsp  succ "<<endl;
         return;
     }
     cout<<"write rsp fail"<<endl;
@@ -154,7 +157,7 @@ void THandlePool::create(mess& m) {
         }
             
         if(ret == -2)
-            cout<<"create fail ,because createed a topic"<<endl;
+            //cout<<"create fail ,because createed a topic"<<endl;
         socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,0,0,0,"",NULL,0);
     }
     else {
@@ -164,7 +167,7 @@ void THandlePool::create(mess& m) {
             return ;
         }
         if(ret == -2) 
-            cout<<"create fail ,because createed a topic"<<endl;
+            //cout<<"create fail ,because createed a topic"<<endl;
         return ;
         
     }
@@ -182,7 +185,7 @@ void THandlePool::dele(mess& m) {
     if(ack == true) {
         if(ret == 0 || ret == -2){
             socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,0,0,0,"",NULL,0);
-            cout<<"dele topic succ"<<endl;
+            //cout<<"dele topic succ"<<endl;
             return ;
         }
         socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,FAIL,0,0,0,"",NULL,0);
@@ -191,7 +194,7 @@ void THandlePool::dele(mess& m) {
     }
     else {
         if(ret == 0 || ret == -2) {
-            cout<<"dele topic succ"<<endl;
+            //cout<<"dele topic succ"<<endl;
             return ;
         }
         cout<<"dele topic fail"<<endl;
@@ -229,11 +232,35 @@ void THandlePool::subscribe(mess& m) {
     int ret;
     ret = T->addGroup(groupId);
     if(ret == 0) {
-        cout<<"subsrcbe succ"<<endl;
+        //cout<<"subsrcbe succ"<<endl;
         socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,SUBSUCC,groupId,0,head->topicL,topic,NULL,0);
         return ;
     }
-    cout<<"subsrcbed "<<endl;
+    //cout<<"subsrcbed "<<endl;
     socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,SUBSUCC,groupId,0,head->topicL,topic,NULL,0);
+    return ;
+}
+void THandlePool::deleSub(mess& m) {
+    //cout<<"subscribe"<<endl;
+    Head* head = reinterpret_cast<Head*>(m.dst);
+    size_t groupId = head->groupId;
+    string topic(m.dst+sizeof(Head),head->topicL);
+    free(m.dst);
+    Topic* T = topicMgr::get_mutable_instance().get(topic);
+    if(T == NULL) {
+        //no topic
+        cout<<"no topic"<<endl;
+        socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,groupId,0,head->topicL,topic,NULL,0);
+        return ;
+    }
+    int ret;
+    ret = T->subGroup(groupId);
+    if(ret == 0) {
+        //cout<<"subsrcbe succ"<<endl;
+        socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,groupId,0,head->topicL,topic,NULL,0);
+        return ;
+    }
+    //cout<<"subsrcbed "<<endl;
+    socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,groupId,0,head->topicL,topic,NULL,0);
     return ;
 }
