@@ -144,12 +144,105 @@ int Produce::send(string topic,const char* data,size_t len,bool ack ) {
         
     }
     else {
-        write(socketId,sendline,head.len);
-        //cout<<"send create cmd succ"<<endl;
+        int ret = 0;
+        while( write(socketId,sendline,head.len) != head.len) {
+
+        }
         return 0;
     }
     return 0;
 
 
 
+}
+int Produce::dele(string topic,bool ack) {
+    char sendline[1024], recvline[1024];
+    Head head;
+    head.cmd=DELETE;
+    head.ack=ack;
+    head.topicL=topic.size();
+    head.len = sizeof(Head)+head.topicL+1;
+    memcpy(sendline,&head,sizeof(Head));
+    memcpy(sendline+sizeof(Head),topic.c_str(),head.topicL);
+    sendline[sizeof(Head)+head.topicL] = '\n';
+    int n = 0;
+    if(ack == true) {
+        int ret = 0;
+        ret = write(socketId,sendline,head.len);
+        if(ret == 0) {
+            cout<<"connnect closed"<<endl;
+            exit(-1);
+        }
+        int cnt = 5;
+        while( (n = read(socketId,recvline,1024))<0  ) {
+            if(cnt == 0){
+                cout<<"exit"<<endl;
+                exit(-1);
+            }
+            write(socketId,sendline,head.len);
+            cnt--;
+        }
+        if(n == 0) {
+            cout<<"connect closed"<<endl;
+            exit(-1);
+        }
+        Head* rsp =(Head*) recvline;
+        if(rsp->cmd==RSP){
+            if(rsp->ret == OK) {
+                cout<< "delete topic succ : "<<topic<<endl;
+                return 0;
+            }  
+            else if(rsp->ret == FAIL) {
+                cout<<"delete fail"<<endl;
+                return -1;
+            }   
+            else
+                cout<<"unhnwon ret"<<endl;
+            return -1;
+        } 
+        else
+        {
+            cout<<"unexcept cmd"<<endl;
+            return -1 ;
+        }
+        
+    }
+}
+int Produce::getList(string& list) {
+    char sendline[1024], recvline[1024];
+    Head head;
+    head.cmd=GETLIST;
+    head.len = sizeof(Head)+1;
+    memcpy(sendline,&head,sizeof(Head));
+    sendline[sizeof(Head)] = '\n';
+
+    int ret = 0;
+    ret = write(socketId,sendline,head.len);
+    if(ret == 0) {
+        cout<<"connnect closed"<<endl;
+        exit(-1);
+    }
+       
+    ret = read(socketId,recvline,1024);
+           
+    if(ret <= 0) {
+        cout<<"connect closed"<<endl;
+        exit(-1);
+    }
+    Head* rsp =(Head*) recvline;
+    if(rsp->cmd==RSP){
+        if(rsp->ret == OK) {
+            list = string(recvline+sizeof(Head),rsp->len - sizeof(Head));
+            return 0;
+        }  
+        else
+            cout<<"unhnwon ret"<<endl;
+        return -1;
+    } 
+    else
+    {
+        cout<<"unexcept cmd"<<endl;
+        return -1 ;
+    }
+    
 }

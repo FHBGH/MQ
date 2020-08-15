@@ -11,7 +11,7 @@ using namespace std;
 
 class Topic{
 public:
-    Topic(const string & topic):name(topic){}
+    Topic(const string & topic):name(topic) {}
     ~Topic() {
         for(auto iter = offsetMutex.begin();iter != offsetMutex.end();iter++) {
             delete iter->second;
@@ -62,6 +62,7 @@ public:
     int createTopic(const string &topic);
     Topic* get(const string& topic);
     int dele(const string& topic);
+    int getList(string& string);
 
 private:
     unordered_map<string,Topic*> topicList;

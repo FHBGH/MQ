@@ -38,7 +38,8 @@ enum CMD{
     DELETE = 4,
     RSP = 5,
     SUBSCRIBE = 6,
-    DELESUB
+    DELESUB = 7,
+    GETLIST
 };
 enum statecode{
     OK = 0,

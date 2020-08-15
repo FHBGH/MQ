@@ -23,6 +23,7 @@ public:
     char* pop();
     int get(const string topic,char* message,int& len,uint64_t& seq);
     int deleSub(const string topic);
+    int getList(string& list);
 private:
     string mqIp;
     int mqPort = 0;

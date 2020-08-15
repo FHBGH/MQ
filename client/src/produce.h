@@ -20,6 +20,8 @@ public:
     int init(string url);
     int create(string topic,bool ack = false);
     int send(string topic,const char* data,size_t len,bool ack = false);
+    int dele(string topic,bool ack = false);
+    int getList(string& list);
 private:
     int socketId;
 };

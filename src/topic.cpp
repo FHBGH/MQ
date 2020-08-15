@@ -38,6 +38,7 @@ messInTopic  Topic::front(size_t groupId,uint64_t offset,uint64_t &idx) {
             return t ;
         }
     }
+    
      //产看缓存区是否有要确认的数据
     if(groupCache[groupId].find(offset) != groupCache[groupId].end()) {
         //cout<<offset<<endl;
@@ -47,7 +48,7 @@ messInTopic  Topic::front(size_t groupId,uint64_t offset,uint64_t &idx) {
         groupCache[groupId].erase(offset);
         //产看序列号最小的一个元素。如果序列号比当前序列号小一定数值就将其重新放入到队列
         //uint64_t diff = offset - groupCache[groupId].begin()->first;
-        /*
+        
         if( (groupCache[groupId].size()>0) && (offset > 50 + groupCache[groupId].begin()->first) )  {   
             //cout<<" offset "<<offset<<"  begin value "<<groupCache[groupId].begin()->first<<endl;
             groupQue[groupId].push(groupCache[groupId].begin()->second);
@@ -57,7 +58,7 @@ messInTopic  Topic::front(size_t groupId,uint64_t offset,uint64_t &idx) {
             groupCache[groupId].erase(iter);
             
         }
-        */
+        
     }
    
 
@@ -134,12 +135,12 @@ int Topic::subGroup(uint32_t groupId) {
     return 0;
 }
 
-bool TopicMgr::hasTopic(const string &topic){
+bool TopicMgr::hasTopic(const string &topic) {
     bool ret;
     {
         boost::shared_lock<boost::shared_mutex> lock(mtx);
         
-        ret=(topicList.find(topic) != topicList.end());
+        ret = (topicList.find(topic) != topicList.end());
     }
     return ret;
 }
@@ -165,5 +166,12 @@ int TopicMgr::dele(const string& topic) {
         return -2;
     delete topicList[topic];
     topicList.erase(topic);
+    return 0;
+}
+int TopicMgr::getList(string& list) {
+    boost::shared_lock<boost::shared_mutex> lock(mtx);
+    for(auto iter = topicList.begin();iter != topicList.end();iter++) {
+        list+=iter->first+"  ";
+    }
     return 0;
 }

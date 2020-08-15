@@ -6,7 +6,7 @@
 //#include "spdlog/spdlog.h"
 
 void THandlePool::init(int num) {
-    numThread=num;
+    numThread = num;
     for(int i = 0;i < numThread;i++) {
         thread_.push_back(new thread(&THandlePool::workThread,this));
         //spdlog::info("THandlePool create thread succ|id = {} ",i);
@@ -14,7 +14,7 @@ void THandlePool::init(int num) {
         thread_[i]->detach();
     }
 }
-void THandlePool::workThread(){
+void THandlePool::workThread() {
     while(1) {
         struct mess m;
         requestQue::get_mutable_instance().getReq(m);
@@ -28,6 +28,7 @@ void THandlePool::workThread(){
             case DELETE:dele(m);break;
             case SUBSCRIBE:subscribe(m);break;
             case DELESUB:dele(m);break;
+            case GETLIST:getList(m);break;
             default: others(m);
         }
     }
@@ -51,7 +52,7 @@ void THandlePool::push(mess &m) {
     Topic* partion = topicMgr::get_mutable_instance().get(topic);
     if(ack == false)
     {
-        if(partion == NULL){
+        if(partion == NULL) {
             cout<< "no topic" <<endl;
             //free(mt.data);
             return;
@@ -60,13 +61,13 @@ void THandlePool::push(mess &m) {
     }
     else {
         int ret = 0;
-        if(partion == NULL){
+        if(partion == NULL) {
             cout<< "no topic" <<endl;
             //free(mt.data); 
           
             ret = socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,NO_TOPIC,0,0,0,"",NULL,0);
        
-            if(ret == 0){
+            if(ret == 0) {
                 //cout<<"write rsp  succ "<<endl;
                 return;
             }
@@ -79,7 +80,7 @@ void THandlePool::push(mess &m) {
         
         
         ret = socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,0,0,0,"",NULL,0);       
-        if(ret == 0){
+        if(ret == 0) {
             //cout<<"write rsp  succ "<<endl;
             return;
         }
@@ -88,7 +89,7 @@ void THandlePool::push(mess &m) {
     }
     return;
 }
-void THandlePool::pull(mess& m){
+void THandlePool::pull(mess& m) {
     Head* head =reinterpret_cast<Head*>(m.dst);
     uint32_t topicL = head->topicL;
     string topic(m.dst+sizeof(Head),topicL);
@@ -98,7 +99,7 @@ void THandlePool::pull(mess& m){
     Topic* T = topicMgr::get_mutable_instance().get(topic);
     int ret = 0;
    
-    if(T == NULL){
+    if(T == NULL) {
         cout<< "no topic" <<endl;
      
         ret = socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,NO_TOPIC,groupId,offset,topicL,topic,NULL,0);
@@ -263,4 +264,21 @@ void THandlePool::deleSub(mess& m) {
     //cout<<"subsrcbed "<<endl;
     socketService::get_mutable_instance().do_rsp(m.fd,RSP,0,OK,groupId,0,head->topicL,topic,NULL,0);
     return ;
+}
+void THandlePool::getList(mess& m) {
+    string list;
+    topicMgr::get_mutable_instance().getList(list);
+    Head head;
+    head.cmd = RSP;
+    head.ret = OK;
+    head.topicL = 0;
+    head.len = sizeof(head)+list.size();
+    char * dst = (char*) malloc (head.len);
+    memcpy(dst,&head,sizeof(head));
+    memcpy(dst+sizeof(head),list.c_str(),list.size());
+    int ret = 0; 
+    ret = write(m.fd,dst,head.len);
+    if(ret <= 0)
+        cout<<"write list fail"<<endl;
+    free(dst);
 }

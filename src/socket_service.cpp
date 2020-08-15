@@ -4,7 +4,7 @@
 
 int SocketService::init(int numWork) {
     numWorkThread = numWork;
-    for(int i=0;i<numWork;i++) {
+    for(int i = 0;i < numWork;i++) {
         //这需不需要锁呢
         numPerThread.push_back(0);
         int* t = (int *)malloc(2*sizeof(int));
@@ -41,16 +41,14 @@ int SocketService::mainThread() {
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     int ret = bind(socketId,( sockaddr*) &servaddr,sizeof(servaddr));
-    if(ret<0) {
-        string err="socket bind faild|return "+to_string(ret);
-        cout<<err<<endl;
+    if(ret < 0) {
+        cout<<"socket bind faild|return "<<endl;
         return -1;
     }
     cout<<"socket bind succ"<<endl;
     ret = listen(socketId,20);
-    if(ret<0) {
-        string err="socket listen faild|return "+to_string(ret);
-        cout<<err<<endl;
+    if(ret < 0) {
+        cout<<"socket listen faild|return "<<endl;
         return -1;
     }
     cout<<"socket listen succ"<<endl;
@@ -80,7 +78,7 @@ void SocketService::workThread(int id) {
     int id_ = id;
     //线程自己的事件循环
     thread::id tid = this_thread::get_id();
-    this->idx[tid]=id_;
+    this->idx[tid] = id_;
     struct event_base *base = event_base_new();
     if(base == NULL) {
         cout<<"base NULL"<<endl;
@@ -99,7 +97,7 @@ void SocketService::workThread(int id) {
     //event_free(signal_event);
     //event_base_free(base);
 }
-void SocketService::do_pipe(int fd,short event,void *arg){
+void SocketService::do_pipe(int fd,short event,void *arg) {
     event_base* base = (event_base*)arg;
     evutil_socket_t fd_;
     struct sockaddr_in sin;
@@ -119,7 +117,7 @@ void SocketService::do_pipe(int fd,short event,void *arg){
 }
 
 void SocketService::do_accept(evutil_socket_t listener,short event,void* arg) {
-    SocketService* base=(SocketService *)arg;
+    SocketService* base = (SocketService *)arg;
     evutil_socket_t fd;
     struct sockaddr_in sin;
     socklen_t slen;
@@ -134,11 +132,11 @@ void SocketService::do_accept(evutil_socket_t listener,short event,void* arg) {
     }
     cout<<"accept fd "<<fd<<endl;
     int idx = 0;
-    int min_= INT_MAX;
+    int min_ = INT_MAX;
     for(int i = 0;i < base->numWorkThread;i++) {
         base->numPerThreadM.lock();
         if(base->numPerThread[i] < min_){
-            min_ =base-> numPerThread[i];
+            min_ = base-> numPerThread[i];
             idx = i;
         }
         base->numPerThreadM.unlock();
@@ -219,13 +217,13 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
             if(buf->offset == 0) {
                 //如果剩下的自己不够包头长度
                 if( ret-i < sizeof(uint32_t)) {
-                    memcpy(buf->buf,buffer+i,ret -i);
-                    buf->offset = ret-i;
+                    memcpy(buf->buf,buffer + i,ret - i);
+                    buf->offset = ret - i;
                     break;  
                 }
-                Head * head = (Head*)(buffer+i);
+                Head * head = (Head*)(buffer + i);
                 if(i + head->len <= ret ) {
-                    if( inputQue(fd,buffer+i,head->len) !=0 ) {
+                    if( inputQue(fd,buffer + i,head->len) !=0 ) {
                         th->release(bev);
                         return;
                     }     
@@ -233,7 +231,7 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
                     continue;
                 }
                 else {
-                    memcpy(buf->buf,buffer+i,ret - i);
+                    memcpy(buf->buf,buffer + i,ret - i);
                     buf->offset = ret - i;
                     //cout<<"offset"<<buf->offset<<"headlen"<<head->len<<endl;
                     buf->len = head->len;
@@ -245,12 +243,12 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
             }
             if(buf->offset<sizeof(uint32_t)) {
                 if(ret-i+buf->offset < sizeof(uint32_t)) {
-                    memcpy(buf->buf+buf->offset,buffer+i,ret-i);
-                    buf->offset += ret-i;
+                    memcpy(buf->buf + buf->offset,buffer + i,ret - i);
+                    buf->offset += ret - i;
                     break;
                 }
-                memcpy(buf->buf+buf->offset,buffer+i,sizeof(uint32_t)-buf->offset);
-                i += sizeof(uint32_t)-buf->offset;
+                memcpy(buf->buf + buf->offset,buffer + i,sizeof(uint32_t) - buf->offset);
+                i += sizeof(uint32_t) - buf->offset;
                 buf->offset = sizeof(uint32_t);
                 Head* head = (Head*)buf->buf;
                 buf->len = head->len;
@@ -266,29 +264,29 @@ void SocketService::read_cb(struct bufferevent *bev, void *arg) {
             }*/
             int need = buf->len - buf->offset;
             if(need <= ret) {
-                memcpy(buf->buf+buf->offset,buffer+i,need);
+                memcpy(buf->buf + buf->offset,buffer + i,need);
                 buf->offset += need;
                 i += need;
             } 
             else {
-                 memcpy(buf->buf+buf->offset,buffer+i,ret);
+                 memcpy(buf->buf + buf->offset,buffer + i,ret);
                  buf->offset += ret ;
                  i += ret;
                  break;
             }
             struct mess temp;
             temp.fd = fd;
-            temp.len = buf->offset-1;
+            temp.len = buf->offset - 1;
             if(buf->buf[temp.len] != '\n') {
                 th->release(bev);
                 return;
             }
                
-            char* dst = (char*) malloc( buf->offset-1);
-            memcpy(dst,buf->buf,buf->offset-1);
+            char* dst = (char*) malloc( buf->offset - 1);
+            memcpy(dst,buf->buf,buf->offset - 1);
             temp.dst = dst;
             buf->offset = 0;
-            buf->len =0;
+            buf->len = 0;
              
             //cout<<"reading "<<temp.len<<" bytes "<<head->cmd<<endl;
             requestQue::get_mutable_instance().pushReq(temp);
@@ -303,11 +301,11 @@ int SocketService::inputQue(evutil_socket_t fd,char* buffer , int len) {
     struct mess temp;
     temp.fd = fd;
     // 去掉 ‘\n'
-    temp.len = len-1;
-    if(buffer[len-1] != '\n')
+    temp.len = len - 1;
+    if(buffer[len - 1] != '\n')
         return -1;
-    char* dst = (char*) malloc(len-1);
-    memcpy(dst,buffer,len-1);
+    char* dst = (char*) malloc(len - 1);
+    memcpy(dst,buffer,len - 1);
     temp.dst = dst;
     //Head *head =(Head*) dst;
     //

@@ -74,7 +74,7 @@ int  Consumer::subscrip(string topic) {
         cout<<"send subscrip mess fail"<<endl;
         return -1;
     }
-    cout<<"subscrip mess send succ "<<endl;
+    //cout<<"subscrip mess send succ "<<endl;
     
     ret = read(socketId,buffer,1024);
     if( ret <= 0){
@@ -185,4 +185,42 @@ int Consumer::deleSub(const string topic) {
         cout<<" unexcept   ret  or no topic"<<endl;
         return -1;
     }
+}
+int Consumer::getList(string& list) {
+    char sendline[1024], recvline[1024];
+    Head head;
+    head.cmd=GETLIST;
+    head.len = sizeof(Head)+1;
+    memcpy(sendline,&head,sizeof(Head));
+    sendline[sizeof(Head)] = '\n';
+
+    int ret = 0;
+    ret = write(socketId,sendline,head.len);
+    if(ret == 0) {
+        cout<<"connnect closed"<<endl;
+        exit(-1);
+    }
+       
+    ret = read(socketId,recvline,1024);
+           
+    if(ret <= 0) {
+        cout<<"connect closed"<<endl;
+        exit(-1);
+    }
+    Head* rsp =(Head*) recvline;
+    if(rsp->cmd==RSP){
+        if(rsp->ret == OK) {
+            list = string(recvline+sizeof(Head),rsp->len - sizeof(Head));
+            return 0;
+        }  
+        else
+            cout<<"unhnwon ret"<<endl;
+        return -1;
+    } 
+    else
+    {
+        cout<<"unexcept cmd"<<endl;
+        return -1 ;
+    }
+    
 }

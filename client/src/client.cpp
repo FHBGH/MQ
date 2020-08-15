@@ -5,89 +5,49 @@
 #include <chrono>
 #include <mutex>
 #include <functional> 
+#include <boost/thread/thread.hpp>
 using namespace std;
 char* genRandomString(int length) ;
-void workThread(string topic ,bool ack,int  len ) ;
-void test(string topic ,bool ack , int threadNum ,int len ) ;
-void create(string topic,bool ack = true);
-void send(string topic,bool ack = false );
+void workThread(std::string topic ,bool ack,int  len ) ;
+void test(std::string topic ,bool ack , int threadNum ,int len ) ;
+void create(std::string topic,bool ack = true);
+void send(std::string topic,bool ack = false );
+void dele(std::string topic,bool ack);
+int getList(std::string& list);
 mutex coutM;
-vector<float> count;
+std::vector<float> count_;
 mutex countM;
+boost::shared_mutex mtx;
+int cT = 0;
+int tNum = 0;
 int main(int argc, char **argv)
-{   
-    /*string topic = "first";
-    string temp = "false";
+{ 
+    std::string topic = "first";
+    std::string temp = "false";
+    std::string mode = "send";
+    std::string threadNum = "1";   
+    std::string len = "10";
     bool ack = false;
     if(argc < 2) {
-        cout<<"usage: "<<argv[0]<<" topic [true/false]"<<endl;
-        return 0;
-    }
-    for(int i = 0;i < argc;i++) {
-        if(i == 1)
-            topic= string(argv[i]);
-        if(i == 2)
-            temp = string(argv[i]);
-    }
-    if(temp == "true")
-        ack = true;
-    produce::get_mutable_instance().init("9.135.10.161:6000");
-    produce::get_mutable_instance().create(topic,true);
-    sleep(1);
-    int i=1;
-    string str;
-    while(0) {
-        //cin>>str;
-        str = to_string(i++);
-        
-        produce::get_mutable_instance().send(topic,str.c_str(),str.size(),ack);
-    }*/
-
-//////////////////////////test//////////////////////////////////////
-    string topic = "first";
-    string temp = "false";
-    string mode = "send";
-    string threadNum = "1";   
-    string len = "10";
-    bool ack = false;
-    if(argc < 3) {
-        cout<<"usage: "<<argv[0]<<"create/test/send topic [true/false] threadNum len"<<endl;
+        std::cout<<"usage: "<<argv[0]<<" create/test/send/delete/list topic [true/false] threadNum len"<<endl;
         return 0;
     }
 
     for(int i = 0;i < argc;i++) {
         if(i == 1)
-            mode= string(argv[i]);
+            mode= std::string(argv[i]);
         else if(i == 2)
-            topic = string(argv[i]);
+            topic = std::string(argv[i]);
         else if(i == 3)
-            temp = string(argv[i]);
+            temp = std::string(argv[i]);
         else if(i == 4)
-            threadNum = string(argv[i]);
+            threadNum = std::string(argv[i]);
         else if(i == 5)
-            len = string(argv[i]);
+            len = std::string(argv[i]);
     }
     if(temp == "true")
         ack = true;
 
-/*
-    enum MODE {
-        CREATE,
-        TEST,
-        SEND
-    };
-    bind(MODE::CREATE , "create");
-    bind(MODE::TEST , "test");
-    bind(MODE::SEND , "send");
-    int nKey = Manager::keyFromString(mode);
-
-    switch(nKey){
-        case MODE::CREATE : create(topic,true);
-        case MODE::TEST :test(topic,ack,stoi(threadNum),stoi(len));break;
-        case MODE::SEND :send(topic,ack);
-        default : cout<<"invaild mode! ---usage: "<<argv[0]<<"create/test/send topic [true/false] threadNum len"<<endl;
-    }
-*/  
     if(mode == "create") {
         create(topic,true);
         return 0;
@@ -100,28 +60,51 @@ int main(int argc, char **argv)
         send(topic,ack); 
         return 0;
     }
+    if(mode == "delete") {
+        dele(topic,ack);
+        return 0;
+    }
+    if(mode == "list") {
+        std::string list;
+        int ret;
+        ret = getList(list);
+        if(ret != 0)
+            return 0;
+        cout<<"topic list : "<<list<<endl;
+        return 0;
+    }
     cout<<"invaild mode! ---usage: "<<argv[0]<<"create/test/send topic [true/false] threadNum len"<<endl;
     return 0;
 }
-void create(string topic,bool ack ) {
+void create(std::string topic,bool ack ) {
     Produce p;
     p.init("9.135.10.161:6000");
     p.create(topic,ack);
 }
 
-void send(string topic,bool ack ) {
+void send(std::string topic,bool ack ) {
     Produce p;
     p.init("9.135.10.161:6000");
-    string str;
+    std::string str;
     while(1) {
         cin>>str;
         p.send(topic,str.c_str(),str.size(),ack);
     }
     
 }
+void dele(string topic,bool ack) {
+    Produce p;
+    p.init("9.135.10.161:6000");
+    p.dele(topic,ack);
+}
+int getList(string& list) {
+    Produce p;
+    p.init("9.135.10.161:6000");
+    return p.getList(list);
+}
 
 void test(string topic ,bool ack , int threadNum ,int len ) {
-
+    tNum = threadNum;
     vector<thread*> vec(threadNum);
     for(int i = 0;i < threadNum; i++) {
         vec[i] =new thread(workThread,topic,ack,len);
@@ -134,7 +117,7 @@ void test(string topic ,bool ack , int threadNum ,int len ) {
     }
     float sum = 0;
     for(int i = 0;i < threadNum; i++) {
-        sum += count[i];
+        sum += count_[i];
     }
     cout<<"平均每个线程的发送速率（threadNum = "<<threadNum<<" , len = " <<len<<" ）： "<<sum/threadNum<<"个/ms"<<endl;
 
@@ -143,23 +126,36 @@ void test(string topic ,bool ack , int threadNum ,int len ) {
 void workThread(string topic ,bool ack,int  len ) {
     Produce p1;
     p1.init("9.135.10.161:6000");
-    //p1.create(topic , ack);
     sleep(1);
     int i = 0;
     char * str = genRandomString(len);
+    int temp = 0;
+    if(str == NULL)
+        return;
+    
+    {
+        boost::unique_lock<boost::shared_mutex> lock(mtx);
+        temp = ++cT;
+    }
+    
+    while(temp < tNum){
+        boost::shared_lock<boost::shared_mutex> lock(mtx);
+        temp = cT;
+    }
+    
     std::chrono::milliseconds begin = std::chrono::duration_cast< std::chrono::milliseconds >(
         std::chrono::system_clock::now().time_since_epoch()
     );
-    while(i++<5000) {
+    while(i++<10000) {
         p1.send(topic,str,len,ack);
     }
     std::chrono::milliseconds end = std::chrono::duration_cast< std::chrono::milliseconds >(
         std::chrono::system_clock::now().time_since_epoch()
     );
     free(str);
-    float speed = 5000.0/(end.count()-begin.count());
+    float speed = 10000.0/(end.count()-begin.count());
     countM.lock();
-    count.push_back(speed);
+    count_.push_back(speed);
     countM.unlock();
     coutM.lock();
     cout<<"thread "<<std::this_thread::get_id()<<" speed "<< speed <<"个/ms"<<endl;
@@ -176,7 +172,7 @@ char* genRandomString(int length)
         return NULL ;  
     }  
   
-    for (i = 0; i < length+1; i++)  
+    for (i = 0; i < length; i++)  
     {  
         flag = rand() % 3;  
         switch (flag)  
@@ -195,6 +191,6 @@ char* genRandomString(int length)
                 break;  
         }  
     }  
-    string[length] = '\0';
+    //string[length] = '\0';
     return string;  
 } 
